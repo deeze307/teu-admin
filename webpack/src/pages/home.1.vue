@@ -1,0 +1,218 @@
+<template>
+  <v-container>
+    <v-flex xs12 class="text-xs-center">
+      <v-progress-circular
+              :size="70"
+              :width="7"
+              color="orange"
+              indeterminate
+              v-if="user.apiGetUserDataRunning"
+      ></v-progress-circular>
+
+      <div v-if="!user.loggedIn && !user.apiGetUserDataRunning">
+        <p class="subheading">Por favor, inicie sesion para acceder a esta sección.</p>
+
+        <div class="text-xs-center">
+          <v-btn round color="primary" small @click="goToLogin">Quiero iniciar sesion</v-btn>
+        </div>
+
+      </div>
+
+      <div v-if="user.loggedIn">
+        <h3 class="display-2 font-weight-bold" >Bienvenido!</h3>
+
+        <h3 v-if="persona" class="display-1">
+          {{persona.nombres }} {{persona.apellidos }}
+        </h3>
+
+        <v-divider class="my-3"></v-divider>
+
+        <div v-if="!persona" >
+          <p class="subheading">Por favor, ingrese su número de documento en el campo de búsqueda para vincular un perfíl ya creado.</p>
+          <v-text-field
+          v-model="documento_nro"
+          label="Ingrese su número de documento"
+          v-on:keyup.enter="startFindPersona"
+          ></v-text-field>
+          <v-btn color="primary" @click="startFindPersona" :loading="findPersonaRunning" :block="isMobile"><v-icon left>search</v-icon>Buscar Perfíl</v-btn>
+
+          <!-- Resultados de busqueda -->
+          <v-container fluid grid-list-md>
+            <v-layout row wrap>
+              <v-flex
+                    v-for="res in resultado"
+                    :key="res.id"
+                    xs12 sm12 md3 lg3 xl6 mb-1
+                  >
+                <v-card>
+                  <v-layout fill-height>
+                    <v-flex xs12 flexbox>
+                      <v-card-title primary-title>
+                        <div>
+                          <h3 class="subheading mb-0">{{ res.nombres }} {{ res.apellidos}}</h3>
+                          <div>DNI: {{ res.documento_nro}}</div>
+                        </div>
+                      </v-card-title>
+                      <v-card-actions>
+                        <v-btn color="success" @click="goWithSelected(res)" :loading="vinculandoPerfil" :block="isMobile"><v-icon left>person</v-icon>Vincular Perfíl</v-btn>
+                      </v-card-actions>
+                    </v-flex>
+                  </v-layout>
+                </v-card>
+              </v-flex>
+            </v-layout>
+          </v-container>
+          <p class="subheading">Si no se encontraron resultados, complete sus datos personales para poder continuar.</p>
+
+          <v-flex>
+            <v-btn class="mx-0" color="success" :block="isMobile" @click="goToFamiliar('create')">
+              <v-icon left>how_to_reg</v-icon>Completar perfíl
+            </v-btn>
+          </v-flex>
+        </div>
+        <!-- EN CASO QUE LA PERSONA ESTE DEFINIDA -->
+        <div v-else>
+
+          <!-- EDICION DE PERSONA -->
+          
+          <v-flex>
+            <v-btn class="mx-0" color="orange" dark large :block="isMobile" @click="goToFamiliar('update')">
+              <v-icon left>edit</v-icon>Editar  mi perfil
+            </v-btn>
+          </v-flex>
+
+          <v-flex>
+            <v-btn class="mx-0" color="primary" large :block="isMobile" @click="goToStudent">
+              <v-icon left>how_to_reg</v-icon>Agregar/Ver Estudiantes
+            </v-btn>
+          </v-flex>
+        </div>
+
+      </div>
+
+    </v-flex>
+  </v-container>
+</template>
+<script>
+  import router from '../router'
+
+  export default {
+    data: ()=>({
+      isMobile:false,
+      personaUpdated:false,
+      resultado:[],
+      documento_nro:"",
+      findPersonaRunning: false,
+      vinculandoPerfil:false,
+      
+    }),
+    created: function() {
+      store.commit('updateTitle',"SIEP | Familiares");
+    },
+    mounted: function() {
+      this.onResize();
+    },
+    computed: {
+      user(){
+        return store.state.user
+      },
+      persona(){
+        return store.getters.persona;
+      }
+    },
+    watch:{
+      persona(value){
+        if(!this.personaUpdated){
+          this.createFamiliar(value);
+        }else{
+        }
+      }
+    },
+    methods:{
+      onResize(){
+        if(window.innerWidth <= 480){
+          this.isMobile = true;
+        }else{
+          this.isMobile = false;
+        }
+      },
+      goToLogin: function(){
+        router.push('/')
+      },
+      goToFamiliar:function(mode){
+        router.push(`/inscripciones/familiar/${mode}`)
+      },
+      goToStudent:function(){
+        router.push('/inscripciones')
+      },
+      goWithSelected:function(persona){
+        console.log("antes de limpiar",persona);
+        persona = _.pickBy(persona, _.identity);
+        console.log("despues de limpiar Nulos",persona);
+        persona.ciudad = persona.ciudad.nombre;
+        persona.familiar = 1;
+        if(persona.sexo === "Masculino" || persona.sexo === "MASCULINO"){
+          persona.vinculo = "Padre";
+        }else if(persona.sexo === "Femenino" || persona.sexo === "FEMENINO"){
+          persona.vinculo = "Madre";
+        }
+        this.vinculandoPerfil = true;
+        store.dispatch('apiCreatePersona',persona);
+      },
+      createFamiliar: function(persona){
+        this.personaUpdated = true;
+        var pers = persona;
+        pers = _.pickBy(pers, _.identity);
+        pers.vinculo
+        pers._method = "POST";
+        pers.familiar = 1;
+        pers.ciudad = pers.ciudad.nombre;
+        pers.alumno = 0;
+        if(pers.sexo === "Masculino" || pers.sexo === "MASCULINO"){
+          pers.vinculo = "Padre";
+        }else if(pers.sexo === "Femenino" || pers.sexo === "FEMENINO"){
+          pers.vinculo = "Madre";
+        }
+        store.dispatch('apiCreatePersona',pers);
+      },
+      startFindPersona:function(){
+        let vm = this;
+        vm.findPersonaRunning = true;
+        vm.resultado = [];
+        
+        store.dispatch('apiFindPersona',{
+          documento_nro:this.documento_nro
+        })
+          .then(function (response) {
+            // handle success
+            vm.resultado = response.data.data;
+            console.log(vm.resultado);
+            vm.findPersonaRunning = false;
+        })
+          .catch(function (error) {
+            // handle error
+            vm.resultado = [];
+            vm.findPersonaRunning = false;
+          });
+      },
+    }
+  }
+</script>
+
+<!-- Add "scoped" attribute to limit CSS to this component only -->
+<style scoped>
+h1, h2 {
+  font-weight: normal;
+}
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+li {
+  display: inline-block;
+  margin: 0 10px;
+}
+a {
+  color: #42b983;
+}
+</style>
